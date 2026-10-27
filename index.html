@@ -1,0 +1,1051 @@
+<!doctype html>
+<html lang="zh-Hant">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta charset="utf-8">
+<title>東海龍珠</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;900&display=swap">
+<style>
+/* Layout: one full-height 3D arcade stage; HUD chips top-left, control deck pinned to the bottom. Single dark look (an arcade at night). */
+:root {
+  --night: #04060d;
+  --panel: rgba(6, 14, 30, .78);
+  --line: rgba(120, 200, 255, .35);
+  --cyan: #59d0ff;
+  --gold: #ffd34d;
+  --coral: #ff4d6d;
+  --ink: #eaf3ff;
+  --ink-dim: #8ea7c6;
+  --sans: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--night); color: var(--ink); font-family: var(--sans);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px; box-sizing: border-box; display: flex; flex-direction: column;
+}
+#app {
+  position: relative; flex: 1; min-height: 440px; border-radius: 14px; overflow: hidden;
+  background: radial-gradient(90% 70% at 50% 30%, #0b1630, var(--night));
+  border: 1px solid var(--line);
+}
+#gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+#hud { position: absolute; top: 12px; left: 12px; display: flex; flex-wrap: wrap; gap: 8px; pointer-events: none; max-width: calc(100% - 24px); }
+.chip {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 6px 12px; display: flex; flex-direction: column; min-width: 72px; backdrop-filter: blur(6px);
+}
+.chip span { font-size: 11px; letter-spacing: .12em; color: var(--ink-dim); }
+.chip b { font-size: 20px; font-weight: 900; font-variant-numeric: tabular-nums; }
+#cCoins { color: var(--cyan); } #cTickets { color: var(--gold); } #cDragons { color: #ff9a3c; }
+.deck {
+  position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-wrap: wrap; gap: 8px;
+  justify-content: center; padding: 12px; padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(transparent, rgba(2,4,10,.85));
+}
+button {
+  font-family: var(--sans); font-weight: 900; font-size: 16px; letter-spacing: .08em; color: var(--ink);
+  background: rgba(10, 24, 48, .9); border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 16px; min-height: 46px; cursor: pointer;
+}
+button:hover { border-color: var(--cyan); }
+button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+button[aria-pressed="true"] { background: #4a1022; border-color: var(--coral); }
+#coinBtn {
+  font-size: 22px; padding: 10px 34px; color: #2a1500; border: 0;
+  background: linear-gradient(180deg, #fff1a8, var(--gold) 50%, #d99a12);
+  box-shadow: 0 4px 0 #7a5208, 0 0 26px rgba(255, 211, 77, .4);
+}
+#coinBtn:active { transform: translateY(3px); box-shadow: 0 1px 0 #7a5208; }
+#fx { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.pop {
+  position: absolute; transform: translate(-50%, -50%); font-weight: 900; font-size: 20px; white-space: nowrap;
+  text-shadow: 0 2px 0 #000, 0 0 12px rgba(0,0,0,.8); animation: rise 1.3s ease-out forwards;
+}
+@keyframes rise { from { opacity: 1; margin-top: 0; } to { opacity: 0; margin-top: -60px; } }
+#banner {
+  position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%) scale(.6); opacity: 0;
+  text-align: center; pointer-events: none; transition: opacity .25s, transform .35s cubic-bezier(.2,1.6,.4,1);
+  background: rgba(30, 4, 16, .85); border: 2px solid var(--gold); border-radius: 16px; padding: 12px 28px;
+}
+#banner.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+#banner h2 { margin: 0; font-size: clamp(30px, 6vw, 52px); font-weight: 900; color: var(--gold); text-wrap: balance; }
+#banner p { margin: 4px 0 0; font-size: 18px; color: var(--ink); }
+#hint { position: absolute; top: 12px; right: 12px; font-size: 12px; color: var(--ink-dim); background: var(--panel); border-radius: 8px; padding: 6px 10px; max-width: 220px; line-height: 1.5; }
+#err { position: absolute; inset: 0; z-index: 5; display: grid; place-content: center; justify-items: center; gap: 14px; text-align: center; padding: 24px; color: var(--ink); background: rgba(4,6,13,.92); }
+#err p { margin: 0; max-width: 40ch; line-height: 1.6; }
+#loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--ink-dim); font-size: 15px; letter-spacing: .1em; pointer-events: none; }
+@media (max-width: 560px) { #hint { display: none; } .chip b { font-size: 16px; } #coinBtn { font-size: 19px; padding: 10px 24px; } button { font-size: 14px; padding: 8px 12px; } }
+@media (prefers-reduced-motion: reduce) { .pop { animation-duration: .01s; } #banner { transition: none; } }
+</style>
+
+<div id="app">
+  <canvas id="gl" aria-label="東海龍珠 3D 推珠機台"></canvas>
+  <div id="loading">機台啟動中…</div>
+  <div id="hud">
+    <div class="chip"><span>代幣</span><b id="cCoins">500</b></div>
+    <div class="chip"><span>彩票</span><b id="cTickets">0</b></div>
+    <div class="chip"><span>檯面龍珠</span><b id="cDragons">0/10</b></div>
+  </div>
+  <div id="hint">拖曳可轉動視角，滾輪縮放。按空白鍵投幣。</div>
+  <div id="fx"></div>
+  <div id="banner"><h2 id="bTitle"></h2><p id="bSub"></p></div>
+  <div class="deck">
+    <button id="coinBtn" type="button">投幣</button>
+    <button id="autoBtn" type="button" aria-pressed="false">連續投幣</button>
+    <button id="muteBtn" type="button" aria-pressed="false">音效 開</button>
+    <button id="camBtn" type="button">回正視角</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/environments/RoomEnvironment.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/geometries/RoundedBoxGeometry.js"></script>
+<script>
+(function () {
+  function fail(msg) {
+    var app = document.getElementById('app');
+    if (!app || document.getElementById('err')) return;
+    var ld = document.getElementById('loading'); if (ld) ld.remove();
+    var d = document.createElement('div'); d.id = 'err';
+    var p = document.createElement('p'); p.textContent = msg;
+    var b = document.createElement('button'); b.type = 'button'; b.textContent = '重新載入機台';
+    b.addEventListener('click', function () { location.reload(); });
+    d.appendChild(p); d.appendChild(b); app.appendChild(d);
+  }
+  window.__fail = fail;
+  window.addEventListener('error', function (e) { fail('機台發生錯誤：' + (e.message || '未知錯誤')); });
+  if (!window.THREE) fail('3D 引擎沒有載入，請檢查網路後重新載入。');
+})();
+</script>
+<script>
+(function () {
+'use strict';
+if (!window.THREE || !THREE.OrbitControls) return;
+const { OrbitControls, RoomEnvironment, RoundedBoxGeometry } = THREE;
+const app = document.getElementById('app');
+const canvas = document.getElementById('gl');
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const FONT = '"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif';
+
+// ================= renderer / scene =================
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+} catch (e) {
+  window.__fail('這台裝置的瀏覽器無法開啟 3D 畫面（WebGL），請改用電腦版 Chrome、Edge 或 Safari。');
+  return;
+}
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.5));
+let stopped = false;
+canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); stopped = true; window.__fail('3D 畫面被瀏覽器暫停了（可能是頁面在背景太久或剛收到更新）。'); });
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.9;
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.physicallyCorrectLights = true;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x04060d);
+scene.fog = new THREE.Fog(0x04060d, 140, 320);
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 600);
+const TARGET = new THREE.Vector3(7, 21, 2);
+const CAM_DIR = new THREE.Vector3(0, 0.3, 1).normalize();
+const controls = new OrbitControls(camera, canvas);
+controls.target.copy(TARGET);
+controls.enableDamping = true; controls.enablePan = false;
+controls.minPolarAngle = 0.75; controls.maxPolarAngle = 1.72;
+controls.minAzimuthAngle = -0.7; controls.maxAzimuthAngle = 0.7;
+controls.minDistance = 35; controls.maxDistance = 220;
+
+
+let fitDist = 120;
+function resetCamera() {
+  camera.position.copy(TARGET).addScaledVector(CAM_DIR, fitDist);
+  controls.target.copy(TARGET); controls.update();
+}
+function resize() {
+  const w = app.clientWidth, h = app.clientHeight;
+  if (!w || !h) return;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+  const t = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  const prev = fitDist;
+  fitDist = Math.max(40 / t, 31 / (t * camera.aspect));
+  if (!resize.done) { resize.done = true; resetCamera(); }
+  else { const off = camera.position.clone().sub(controls.target); off.multiplyScalar(fitDist / prev); camera.position.copy(controls.target).add(off); }
+}
+new ResizeObserver(resize).observe(app);
+
+// ================= helpers =================
+function canvasTex(w, h) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+  return { c, g, t };
+}
+function rr(g, x, y, w, h, r) { g.beginPath(); g.roundRect ? g.roundRect(x, y, w, h, r) : g.rect(x, y, w, h); }
+function add(mesh, x = 0, y = 0, z = 0, parent = scene) { mesh.position.set(x, y, z); parent.add(mesh); return mesh; }
+function rbox(w, h, d, mat, r = 0.5) { return new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 3, r), mat); }
+function plane(w, h, mat) { return new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat); }
+
+// 7-segment digits
+const SEG = { '0': 'abcdef', '1': 'bc', '2': 'abged', '3': 'abgcd', '4': 'fgbc', '5': 'afgcd', '6': 'afgedc', '7': 'abc', '8': 'abcdefg', '9': 'abcfgd', '-': 'g', ' ': '' };
+function digit(g, ch, x, y, w, h, on) {
+  const t = w * 0.2, m = t * 0.15;
+  const segs = {
+    a: [x + t, y, w - 2 * t, t], d: [x + t, y + h - t, w - 2 * t, t], g: [x + t, y + h / 2 - t / 2, w - 2 * t, t],
+    f: [x, y + t, t, h / 2 - t * 1.5], b: [x + w - t, y + t, t, h / 2 - t * 1.5],
+    e: [x, y + h / 2 + t / 2, t, h / 2 - t * 1.5], c: [x + w - t, y + h / 2 + t / 2, t, h / 2 - t * 1.5],
+  };
+  for (const k in segs) {
+    const [sx, sy, sw, sh] = segs[k], lit = (SEG[ch] || '').includes(k);
+    g.fillStyle = lit ? on : 'rgba(255,40,40,.08)';
+    g.shadowColor = on; g.shadowBlur = lit ? w * 0.35 : 0;
+    g.fillRect(sx + m, sy + m, sw - 2 * m, sh - 2 * m);
+  }
+  g.shadowBlur = 0;
+}
+function led(g, str, x, y, w, h, n, on = '#ff3030') {
+  rr(g, x, y, w, h, h * 0.12); g.fillStyle = '#0a0000'; g.fill();
+  g.lineWidth = 3; g.strokeStyle = '#3a3f4a'; g.stroke();
+  const s = String(str).padStart(n, ' ').slice(-n);
+  const pad = h * 0.14, dw = (w - pad * 2) / n, dh = h - pad * 2;
+  for (let i = 0; i < n; i++) digit(g, s[i], x + pad + i * dw + dw * 0.1, y + pad, dw * 0.8, dh, on);
+}
+function pearlIcon(g, x, y, r, kind) {
+  const grad = g.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r);
+  if (kind === 'dragon') { grad.addColorStop(0, '#ffe2c0'); grad.addColorStop(.4, '#ff8a2a'); grad.addColorStop(1, '#a8360a'); }
+  else if (kind === 'pink') { grad.addColorStop(0, '#fff'); grad.addColorStop(.4, '#ff9ccf'); grad.addColorStop(1, '#b0306e'); }
+  else { grad.addColorStop(0, '#fff'); grad.addColorStop(.6, '#e9e6f2'); grad.addColorStop(1, '#9a94b2'); }
+  g.fillStyle = grad; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+}
+function ticketIcon(g, x, y, s) {
+  g.save(); g.translate(x, y); g.rotate(-0.15);
+  rr(g, -s, -s * 0.55, s * 2, s * 1.1, s * 0.15); g.fillStyle = '#ffcf3a'; g.fill();
+  g.strokeStyle = '#a86a00'; g.lineWidth = s * 0.1; g.stroke();
+  g.fillStyle = '#a86a00'; g.font = `900 ${s * 0.6}px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('票', 0, 2);
+  g.restore();
+}
+function bubbles(g, w, h, n, alpha = .25) {
+  for (let i = 0; i < n; i++) {
+    const x = Math.random() * w, y = Math.random() * h, r = 3 + Math.random() * 14;
+    g.strokeStyle = `rgba(200,240,255,${alpha})`; g.lineWidth = 2; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = `rgba(255,255,255,${alpha * .8})`; g.beginPath(); g.arc(x - r * .35, y - r * .35, r * .25, 0, Math.PI * 2); g.fill();
+  }
+}
+
+// ================= materials =================
+const M = {
+  body: new THREE.MeshPhysicalMaterial({ color: 0xdfe4ec, roughness: .4, clearcoat: .6, clearcoatRoughness: .25, envMapIntensity: .35 }),
+  chrome: new THREE.MeshStandardMaterial({ color: 0xe6ecf3, metalness: 1, roughness: .16 }),
+  darkChrome: new THREE.MeshStandardMaterial({ color: 0x5d6a7a, metalness: .9, roughness: .3 }),
+  black: new THREE.MeshStandardMaterial({ color: 0x07090f, roughness: .6 }),
+  floor: new THREE.MeshStandardMaterial({ color: 0x0b0f1a, roughness: .35, metalness: .3 }),
+  acrylic: new THREE.MeshPhysicalMaterial({ color: 0xcfefff, roughness: .05, transparent: true, opacity: .16, clearcoat: 1, depthWrite: false }),
+  led: new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 1.6, 3.2), toneMapped: false }),
+  ledWarm: new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 2.2, .8), toneMapped: false }),
+  pearl: new THREE.MeshStandardMaterial({ color: 0xf6f3ee, roughness: .14, metalness: .05, envMapIntensity: 1.1 }),
+  dragon: new THREE.MeshStandardMaterial({ color: 0xff6c12, roughness: .1, metalness: .05, emissive: 0x6a1c00, emissiveIntensity: .55, envMapIntensity: 1.2 }),
+};
+
+// ================= lights =================
+scene.add(new THREE.HemisphereLight(0x9fc4ff, 0x10121c, 0.25));
+const key = new THREE.DirectionalLight(0xffffff, 0.9);
+key.position.set(12, 70, 55); key.target.position.set(4, 0, 2);
+key.castShadow = true; key.shadow.mapSize.set(1024, 1024);
+Object.assign(key.shadow.camera, { left: -32, right: 36, top: 40, bottom: -30, near: 10, far: 160 });
+key.shadow.bias = -0.0004; key.shadow.normalBias = 0.03;
+scene.add(key, key.target);
+const boardLight = new THREE.PointLight(0x4fb6ff, 40, 70, 1.6); boardLight.position.set(0, 26, 4); scene.add(boardLight);
+const tableLight = new THREE.PointLight(0xbfe6ff, 25, 60, 1.6); tableLight.position.set(0, 14, 12); scene.add(tableLight);
+const lampLight = new THREE.PointLight(0xff3050, 40, 50, 1.6); lampLight.position.set(-13, 59, 28); scene.add(lampLight);
+const discLight = new THREE.SpotLight(0xffffff, 120, 50, 0.6, 0.5, 1.4); discLight.position.set(27, 20, 16); discLight.target.position.set(27, -6.5, 9); scene.add(discLight, discLight.target);
+
+// ================= environment: floor + neighbours =================
+const floor = add(new THREE.Mesh(new THREE.PlaneGeometry(600, 300), M.floor), 0, -14, 40);
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
+function neighbour(x) {
+  const g = new THREE.Group();
+  add(rbox(58, 80, 40, M.body, .8), 0, 26, 4, g);
+  const pm = new THREE.MeshBasicMaterial({ color: new THREE.Color(.08, .25, .6), toneMapped: false });
+  add(plane(50, 48, pm), 0, 24, 24.2, g);
+  add(new THREE.Mesh(new THREE.CircleGeometry(4.5, 32), new THREE.MeshBasicMaterial({ color: new THREE.Color(x < 0 ? 0.3 : 2.5, x < 0 ? 2.5 : .3, .4), toneMapped: false })), -20, 60, 24.3, g);
+  g.position.x = x; scene.add(g);
+}
+neighbour(-62); neighbour(76);
+for (let i = 0; i < 14; i++) {
+  const s = new THREE.Mesh(new THREE.SphereGeometry(1.2, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL(Math.random(), 1, .6).multiplyScalar(2.5), toneMapped: false }));
+  add(s, -160 + i * 26, 90 + Math.random() * 20, -120);
+}
+
+// ================= cabinet =================
+// world units ≈ cm. Table surface y=0, x∈[-18,18], z∈[-12,18]. Right column x∈[20,34].
+add(rbox(42, 9, 40, M.body), -1, -9.5, 4);              // left base
+add(rbox(16, 7, 40, M.body), 27, -10.5, 4);             // right base
+add(rbox(4, 66, 40, M.body), -20, 18, 4);               // left pillar
+add(rbox(2.4, 66, 40, M.body), 19, 18, 4);              // partition
+add(rbox(3, 66, 40, M.body), 35, 18, 4);                // right pillar
+add(rbox(60, 3, 40, M.body), 7, 51.5, 4);               // roof
+add(rbox(60, 66, 2, M.body), 7, 18, -16);               // back
+for (const [x, mat] of [[-17.9, M.led], [18.0, M.led], [20.4, M.led], [33.6, M.led]]) {
+  add(new THREE.Mesh(new THREE.CylinderGeometry(.28, .28, 50, 8), mat), x, 23, 21.5);
+}
+const strip = add(new THREE.Mesh(new THREE.BoxGeometry(58, .4, .4), M.led), 7, 49.6, 23.8);
+
+// table slab & surface
+const tableTex = canvasTex(512, 512);
+{
+  const g = tableTex.g, gr = g.createLinearGradient(0, 0, 0, 512);
+  gr.addColorStop(0, '#0d4c86'); gr.addColorStop(1, '#1a77b8'); g.fillStyle = gr; g.fillRect(0, 0, 512, 512);
+  g.strokeStyle = 'rgba(255,255,255,.12)'; g.lineWidth = 3;
+  for (let row = 0; row < 14; row++) for (let col = -1; col < 10; col++) {
+    const x = col * 56 + (row % 2) * 28, y = row * 40 + 30;
+    for (let k = 1; k <= 3; k++) { g.beginPath(); g.arc(x, y, k * 9, Math.PI, 0); g.stroke(); }
+  }
+  bubbles(g, 512, 512, 18, .15);
+}
+const tableMat = new THREE.MeshStandardMaterial({ map: tableTex.t, roughness: .35, metalness: .15 });
+const slab = add(new THREE.Mesh(new THREE.BoxGeometry(36, 1, 30), [M.chrome, M.chrome, tableMat, M.chrome, M.chrome, M.chrome]), 0, -0.5, 3);
+slab.receiveShadow = true;
+add(new THREE.Mesh(new THREE.BoxGeometry(36.6, .5, .7), M.chrome), 0, .05, 18.1);
+// trough
+add(new THREE.Mesh(new THREE.BoxGeometry(36, .4, 6), M.black), 0, -5, 21);
+add(new THREE.Mesh(new THREE.BoxGeometry(36.6, 3.4, .5), M.acrylic), 0, -3.4, 24);
+// side glass + front glass
+add(new THREE.Mesh(new THREE.BoxGeometry(.3, 40, 32), M.acrylic), -18, 20, 3);
+add(new THREE.Mesh(new THREE.BoxGeometry(.3, 40, 32), M.acrylic), 18, 20, 3);
+
+// wiper wall and back board
+add(new THREE.Mesh(new THREE.BoxGeometry(36, 2.8, .6), M.darkChrome), 0, 4.6, -13.4);
+const boardTex = canvasTex(1024, 1024);
+function drawBoard() {
+  const g = boardTex.g, w = 1024, h = 1024;
+  const gr = g.createLinearGradient(0, 0, 0, h);
+  gr.addColorStop(0, '#3fb6ff'); gr.addColorStop(.55, '#1a5fc4'); gr.addColorStop(1, '#0b2a6e');
+  g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  g.save(); g.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 6; i++) {
+    const x = 80 + i * 170; const lg = g.createLinearGradient(x, 0, x + 120, h);
+    lg.addColorStop(0, 'rgba(255,255,255,.18)'); lg.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = lg; g.beginPath(); g.moveTo(x, 0); g.lineTo(x + 60, 0); g.lineTo(x + 220, h); g.lineTo(x + 80, h); g.fill();
+  }
+  g.restore();
+  bubbles(g, w, h * .8, 40, .3);
+  // seaweed & coral silhouettes
+  for (let s = 0; s < 9; s++) {
+    const x = 40 + s * 120 + (s % 2) * 30;
+    g.strokeStyle = s % 3 ? 'rgba(40,180,120,.75)' : 'rgba(150,60,170,.7)'; g.lineWidth = 16; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(x, h);
+    for (let y = h; y > h - 230 - (s % 3) * 50; y -= 20) g.lineTo(x + Math.sin(y * .03 + s) * 18, y);
+    g.stroke();
+  }
+  // slot exit zone (bottom 15%)
+  const sy = h * 0.86;
+  g.fillStyle = 'rgba(4,16,48,.55)'; g.fillRect(0, sy, w, h - sy);
+  SLOT_TYPES.forEach((t, i) => {
+    if (t === 'ticket') {
+      const cx = ((SLOT_EDGES[i] + SLOT_EDGES[i + 1]) / 2 + 18) / 36 * w;
+      g.fillStyle = '#27c46b';
+      g.beginPath(); g.moveTo(cx, sy + 18); g.lineTo(cx + 34, sy + 62); g.lineTo(cx + 14, sy + 62); g.lineTo(cx + 14, h - 14);
+      g.lineTo(cx - 14, h - 14); g.lineTo(cx - 14, sy + 62); g.lineTo(cx - 34, sy + 62); g.closePath(); g.fill();
+    }
+  });
+  boardTex.t.needsUpdate = true;
+}
+const SLOT_TYPES = ['pearl', 'ticket', 'pearl', 'dragon', 'ticket', 'pearl', 'ticket'];
+// the dragon slot is narrower than the others
+const DRAGON_SLOT_W = 2.9, SIDE_SLOT_W = (36 - DRAGON_SLOT_W) / 6;
+const SLOT_EDGES = [-18];
+SLOT_TYPES.forEach(t => SLOT_EDGES.push(SLOT_EDGES[SLOT_EDGES.length - 1] + (t === 'dragon' ? DRAGON_SLOT_W : SIDE_SLOT_W)));
+function slotIndex(x) { for (let i = 0; i < 7; i++) if (x < SLOT_EDGES[i + 1]) return i; return 6; }
+const boardMat = new THREE.MeshStandardMaterial({ map: boardTex.t, emissiveMap: boardTex.t, emissive: 0xffffff, emissiveIntensity: .55, roughness: .6 });
+const BOARD_Y0 = 6, BOARD_Y1 = 39.5;
+add(plane(36, BOARD_Y1 - BOARD_Y0, boardMat), 0, (BOARD_Y0 + BOARD_Y1) / 2, -13.9);
+
+// pegs
+const PEGS = [];
+for (let j = 0; j < 7; j++) {
+  const y = 34.2 - j * 3.35, off = (j % 2) * 2.1;
+  for (let x = -15.75 + off; x <= 15.8; x += 4.2) PEGS.push([x, y]);
+}
+{
+  const im = new THREE.InstancedMesh(new THREE.CylinderGeometry(.33, .33, 2.2, 10), M.chrome, PEGS.length);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0));
+  PEGS.forEach(([x, y], i) => { m.compose(new THREE.Vector3(x, y, -12.9), q, new THREE.Vector3(1, 1, 1)); im.setMatrixAt(i, m); });
+  im.castShadow = true; scene.add(im);
+  // peg caps
+  const caps = new THREE.InstancedMesh(new THREE.SphereGeometry(.42, 10, 8), M.chrome, PEGS.length);
+  PEGS.forEach(([x, y], i) => { m.makeTranslation(x, y, -11.8); caps.setMatrixAt(i, m); });
+  scene.add(caps);
+}
+// slot dividers + label strip
+const DIV_Y0 = 7.2, DIV_Y1 = 13.2;
+const DIVIDERS = [];
+for (let i = 1; i < 7; i++) {
+  const x = SLOT_EDGES[i]; DIVIDERS.push(x);
+  add(new THREE.Mesh(new THREE.BoxGeometry(.45, DIV_Y1 - DIV_Y0, 2.4), M.acrylic), x, (DIV_Y0 + DIV_Y1) / 2, -12.7);
+}
+const slotTex = canvasTex(1400, 160);
+const slotFlash = new Array(7).fill(0);
+function drawSlots() {
+  const g = slotTex.g, w = 1400, h = 160;
+  g.clearRect(0, 0, w, h);
+  SLOT_TYPES.forEach((t, i) => {
+    const x0 = (SLOT_EDGES[i] + 18) / 36 * w, cw = (SLOT_EDGES[i + 1] - SLOT_EDGES[i]) / 36 * w;
+    const x = x0 + 6, lit = slotFlash[i] > 0;
+    rr(g, x, 10, cw - 12, h - 20, 22);
+    g.fillStyle = lit ? 'rgba(255,250,200,.98)' : 'rgba(205,228,255,.8)'; g.fill();
+    g.lineWidth = 5; g.strokeStyle = t === 'dragon' ? '#ff4f9a' : t === 'ticket' ? '#2a8cff' : '#8fb0d6'; g.stroke();
+    const cx = x + (cw - 12) / 2;
+    if (t === 'dragon') {
+      pearlIcon(g, cx, 60, 30, 'dragon');
+      g.font = `900 30px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#d81b60';
+      g.fillText('龍珠', cx, 120);
+      return;
+    }
+    if (t === 'ticket') ticketIcon(g, cx - 40, 78, 26);
+    else pearlIcon(g, cx - 40, 78, 26, t === 'dragon' ? 'dragon' : 'pearl');
+    g.font = `900 46px ${FONT}`; g.textAlign = 'left'; g.textBaseline = 'middle';
+    g.fillStyle = t === 'dragon' ? '#d81b60' : t === 'ticket' ? '#1565c0' : '#455a7a';
+    g.fillText(t === 'dragon' ? '龍珠' : t === 'ticket' ? '彩票' : '珍珠', cx - 6, 80);
+  });
+  slotTex.t.needsUpdate = true;
+}
+add(plane(36, 4.1, new THREE.MeshStandardMaterial({ map: slotTex.t, transparent: true, emissiveMap: slotTex.t, emissive: 0xffffff, emissiveIntensity: .12, roughness: .3 })), 0, 9.4, -11.3);
+// pearl hopper at top
+add(rbox(6, 2.4, 3, M.chrome, .4), 0, 38.4, -12.6);
+
+// party panel
+const partyTex = canvasTex(1200, 260);
+const partyMat = new THREE.MeshStandardMaterial({ map: partyTex.t, emissiveMap: partyTex.t, emissive: 0xffffff, emissiveIntensity: .7 });
+add(plane(36, 7.8, partyMat), 0, 43.7, -13.8);
+
+// marquee
+const marqTex = canvasTex(1600, 380);
+function drawMarquee() {
+  const g = marqTex.g, w = 1600, h = 380;
+  const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#e9f6ff'); gr.addColorStop(1, '#9fd2ff');
+  g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  g.strokeStyle = 'rgba(30,110,200,.18)'; g.lineWidth = 4;
+  for (let row = 0; row < 10; row++) for (let col = -1; col < 30; col++) {
+    const x = col * 64 + (row % 2) * 32, y = row * 42 + 20;
+    for (let k = 1; k <= 3; k++) { g.beginPath(); g.arc(x, y, k * 10, Math.PI, 0); g.stroke(); }
+  }
+  // title plaque
+  rr(g, 470, 40, 1060, 300, 60); g.fillStyle = '#0b3b8c'; g.fill(); g.lineWidth = 12; g.strokeStyle = '#ffffff'; g.stroke();
+  g.font = `900 190px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 26; g.strokeStyle = '#ffffff'; g.strokeText('東海龍珠', 1000, 168);
+  const tg = g.createLinearGradient(0, 80, 0, 260); tg.addColorStop(0, '#5fd0ff'); tg.addColorStop(1, '#0a56c8');
+  g.fillStyle = tg; g.fillText('東海龍珠', 1000, 168);
+  g.font = `900 46px ${FONT}`; g.fillStyle = '#ffd34d'; g.fillText('DONGHAI  DRAGON  PEARL', 1000, 300);
+  marqTex.t.needsUpdate = true;
+}
+add(rbox(60, 15, 3, M.body, .8), 7, 60, 22);
+add(plane(58, 13.8, new THREE.MeshStandardMaterial({ map: marqTex.t, emissiveMap: marqTex.t, emissive: 0xffffff, emissiveIntensity: .45, roughness: .4 })), 7, 60, 23.55);
+const lampMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3, .3, .5), toneMapped: false });
+const bigLamp = add(new THREE.Mesh(new THREE.SphereGeometry(5.2, 40, 24), lampMat), -13, 59.5, 25);
+bigLamp.scale.z = .55;
+add(new THREE.Mesh(new THREE.TorusGeometry(5.6, .7, 16, 48), M.chrome), -13, 59.5, 25.2);
+
+// instruction card
+const cardTex = canvasTex(2400, 200);
+function drawCard() {
+  const g = cardTex.g, w = 2400, h = 200;
+  const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#fff6d8'); gr.addColorStop(1, '#ffe39a');
+  g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  g.fillStyle = '#0b4fae'; g.font = `900 96px ${FONT}`; g.textBaseline = 'middle'; g.textAlign = 'left';
+  g.fillText('玩法說明', 40, h / 2);
+  const rules = [
+    ['1', '投一枚代幣得一顆珍珠，珍珠經過釘板落到推盤，推動龍珠前進。'],
+    ['2', '珍珠穿過獎項口可得額外珍珠或彩票，進龍珠口必出一顆龍珠。'],
+    ['3', '龍珠掉進轉盤，依洞口顏色得 30 或 40 張彩票。'],
+    ['4', '彩票口亮燈累積 5 個進入派對時間，龍珠進紅洞贏超級大獎。'],
+  ];
+  g.font = `500 40px ${FONT}`;
+  rules.forEach(([n, t], i) => {
+    const x = 480 + (i % 2) * 960, y = 58 + Math.floor(i / 2) * 86;
+    g.fillStyle = '#ff4d6d'; g.beginPath(); g.arc(x, y, 24, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#fff'; g.textAlign = 'center'; g.font = `900 32px ${FONT}`; g.fillText(n, x, y + 1);
+    g.fillStyle = '#20314f'; g.textAlign = 'left'; g.font = `500 30px ${FONT}`; g.fillText(t, x + 38, y + 1, 900);
+  });
+  cardTex.t.needsUpdate = true;
+}
+add(plane(56, 4.6, new THREE.MeshStandardMaterial({ map: cardTex.t, roughness: .5, emissiveMap: cardTex.t, emissive: 0xffffff, emissiveIntensity: .25 })), 7, 47.7, 23.7);
+
+// shells
+function makeShell(x, kind) {
+  const g = new THREE.Group();
+  const geo = new THREE.SphereGeometry(1, 48, 16, 0, Math.PI, 0, Math.PI / 2);
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const vx = p.getX(i), vz = p.getZ(i), a = Math.atan2(vz, vx);
+    const f = 1 + 0.08 * Math.abs(Math.cos(a * 7));
+    p.setXYZ(i, vx * f, p.getY(i) * 0.5, vz * f);
+  }
+  geo.computeVertexNormals();
+  const shellMat = new THREE.MeshPhysicalMaterial({ color: 0xf4f6fb, roughness: .3, clearcoat: 1, sheen: .8, sheenColor: new THREE.Color(0xc9e6ff), side: THREE.DoubleSide });
+  const top = new THREE.Mesh(geo, shellMat); top.scale.set(4, 4, 4); top.rotation.set(Math.PI / 2 - 0.25, Math.PI, 0); top.position.set(0, 2.2, -1.2); g.add(top);
+  const bot = new THREE.Mesh(geo, shellMat); bot.scale.set(4, 2.4, 3); bot.rotation.set(Math.PI, 0, 0); bot.position.set(0, -0.2, 0.8); g.add(bot);
+  const inner = new THREE.Mesh(new THREE.CircleGeometry(3.2, 32), new THREE.MeshStandardMaterial({ color: kind === 'dragon' ? 0xffb3d6 : 0xd6ecff, roughness: .5 }));
+  inner.rotation.x = -Math.PI / 2; inner.position.set(0, -0.15, 0.6); g.add(inner);
+  if (kind === 'dragon') {
+    add(new THREE.Mesh(new THREE.SphereGeometry(1.5, 32, 20), new THREE.MeshPhysicalMaterial({ color: 0xff5aa8, roughness: .1, clearcoat: 1, emissive: 0x5a0030 })), 0, 1.3, .6, g);
+  } else {
+    for (let i = 0; i < 5; i++) add(new THREE.Mesh(new THREE.SphereGeometry(0.9, 24, 16), M.pearl), -1.6 + (i % 3) * 1.6, 0.8 + Math.floor(i / 3) * 1.1, .6 + (i % 2) * .6, g);
+  }
+  // sign
+  const st = canvasTex(512, 160), sg = st.g;
+  rr(sg, 4, 4, 504, 152, 26); sg.fillStyle = kind === 'dragon' ? '#ffe3f0' : '#e2f3ff'; sg.fill();
+  sg.lineWidth = 8; sg.strokeStyle = kind === 'dragon' ? '#ff3d8b' : '#1f8fff'; sg.stroke();
+  sg.font = `900 76px ${FONT}`; sg.textAlign = 'center'; sg.textBaseline = 'middle';
+  sg.fillStyle = kind === 'dragon' ? '#d81b60' : '#0d5bd6';
+  sg.fillText(kind === 'dragon' ? '← 龍珠' : '珍珠 →', 256, 70);
+  sg.font = `900 30px ${FONT}`; sg.fillText(kind === 'dragon' ? 'BIG PEARL' : 'SMALL PEARL', 256, 128);
+  st.t.needsUpdate = true;
+  add(plane(6, 1.9, new THREE.MeshStandardMaterial({ map: st.t, emissiveMap: st.t, emissive: 0xffffff, emissiveIntensity: .3 })), 0, -1.8, 2.4, g);
+  g.position.set(x, 9.2, -10.6);
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  scene.add(g); return g;
+}
+const shellL = makeShell(-14.6, 'pearl');
+const shellR = makeShell(14.6, 'dragon');
+
+// pusher
+const pusher = new THREE.Group();
+{
+  const pm = new THREE.MeshPhysicalMaterial({ color: 0x2f6fd0, roughness: .22, clearcoat: 1, metalness: .55 });
+  const body = add(rbox(35.6, 3.2, 18, pm, .4), 0, 1.6, -9, pusher);
+  body.castShadow = true; body.receiveShadow = true;
+  add(new THREE.Mesh(new THREE.BoxGeometry(35.2, .7, .2), M.led), 0, 1.5, .05, pusher);
+}
+scene.add(pusher);
+
+// right column: bonus panel + turntable
+const rightTex = canvasTex(560, 2000);
+const rightMat = new THREE.MeshStandardMaterial({ map: rightTex.t, emissiveMap: rightTex.t, emissive: 0xffffff, emissiveIntensity: .65, roughness: .5 });
+add(plane(13.6, 48.6, rightMat), 27, 23.3, -12);
+const DISC = { x: 27, y: -6.4, z: 9, r: 6, rot: 0 };
+add(rbox(15.6, 1.2, 18, M.body, .4), 27, -7.6, 10);
+add(new THREE.Mesh(new THREE.TorusGeometry(6.5, .45, 12, 64), M.chrome), DISC.x, DISC.y + .1, DISC.z).rotation.x = Math.PI / 2;
+const discGroup = new THREE.Group(); discGroup.position.set(DISC.x, DISC.y, DISC.z); scene.add(discGroup);
+const discTex = canvasTex(512, 512);
+{
+  const g = discTex.g, c = 256;
+  const cols = ['#ffd21f', '#ffffff', '#2f7bff', '#ffffff', '#ffd21f', '#ffffff', '#2f7bff', '#ffffff'];
+  for (let i = 0; i < 8; i++) {
+    g.beginPath(); g.moveTo(c, c); g.arc(c, c, 256, i * Math.PI / 4, (i + 1) * Math.PI / 4); g.closePath(); g.fillStyle = cols[i]; g.fill();
+  }
+  g.fillStyle = '#e8eef8'; g.beginPath(); g.arc(c, c, 60, 0, Math.PI * 2); g.fill();
+  discTex.t.needsUpdate = true;
+}
+const discTopMat = new THREE.MeshStandardMaterial({ map: discTex.t, roughness: .35 });
+const disc = new THREE.Mesh(new THREE.CylinderGeometry(DISC.r, DISC.r, .8, 64), [M.chrome, discTopMat, M.chrome]);
+disc.receiveShadow = true; discGroup.add(disc);
+add(new THREE.Mesh(new THREE.ConeGeometry(1.3, 1.6, 24), M.chrome), 0, 1.2, 0, discGroup);
+const HOLES = [
+  { c: 0x2f7bff, v: 30 }, { c: 0xffc61a, v: 40 }, { c: 0x2f7bff, v: 30 },
+  { c: 0xffc61a, v: 40 }, { c: 0x2f7bff, v: 30 }, { c: 0xff2448, v: 'S' },
+];
+const holeRings = [];
+HOLES.forEach((hd, i) => {
+  hd.a = i * Math.PI / 3;
+  const x = Math.cos(hd.a) * 3.9, z = Math.sin(hd.a) * 3.9;
+  const hole = new THREE.Mesh(new THREE.CircleGeometry(1.25, 28), M.black); hole.rotation.x = -Math.PI / 2; hole.position.set(x, .42, z); discGroup.add(hole);
+  const ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(hd.c).multiplyScalar(hd.v === 'S' ? 1.6 : 1.1), toneMapped: false });
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.35, .2, 8, 32), ringMat); ring.rotation.x = Math.PI / 2; ring.position.set(x, .45, z); discGroup.add(ring);
+  holeRings.push(ring);
+});
+// dragon chute (trough → disc)
+{
+  const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(17.5, -4.6, 21), new THREE.Vector3(20.5, -5, 19), new THREE.Vector3(22.3, -5.6, 13.8)]);
+  add(new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 2.3, 12, false), M.acrylic));
+}
+
+// front base panel
+const frontTex = canvasTex(1600, 360);
+{
+  const g = frontTex.g, w = 1600, h = 360;
+  const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#f6f8fc'); gr.addColorStop(1, '#d9e1ec'); g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  rr(g, 40, 30, 760, 70, 35); g.fillStyle = '#ffe3ec'; g.fill(); g.strokeStyle = '#ff3d6b'; g.lineWidth = 5; g.stroke();
+  g.font = `900 42px ${FONT}`; g.fillStyle = '#d81b4f'; g.textBaseline = 'middle'; g.textAlign = 'left';
+  pearlIcon(g, 90, 65, 24, 'dragon'); g.fillText('本機台龍珠上限 10 顆', 130, 67);
+  rr(g, 1080, 120, 220, 200, 24); g.fillStyle = '#20262f'; g.fill();
+  g.fillStyle = '#000'; rr(g, 1176, 160, 28, 110, 14); g.fill();
+  g.font = `900 34px ${FONT}`; g.fillStyle = '#ffd34d'; g.textAlign = 'center'; g.fillText('投幣口', 1190, 296);
+  frontTex.t.needsUpdate = true;
+}
+add(plane(41, 8.6, new THREE.MeshStandardMaterial({ map: frontTex.t, roughness: .4 })), -1, -9.6, 24.02);
+
+scene.traverse(o => { if (o.isMesh && o.material !== M.acrylic) o.receiveShadow = o.receiveShadow || false; });
+
+// ================= game state =================
+const store = (() => { try { return JSON.parse(localStorage.getItem('donghai3d-v1') || '{}'); } catch (e) { return {}; } })();
+let coins = store.coins ?? 500, tickets = store.tickets ?? 0, history = store.history ?? [];
+let lamps = 0, mode = 'normal', partyT = 0, partyTickets = 0, partyPearls = 0;
+let auto = false, autoCD = 0, time = 0, lastResult = null, resultFlash = 0;
+const SUPER = 500, PARTY_LEN = 15;
+function save() { try { localStorage.setItem('donghai3d-v1', JSON.stringify({ coins, tickets, history: history.slice(-18) })); } catch (e) {} }
+setInterval(save, 2000);
+addEventListener('pagehide', save);
+
+// ================= audio =================
+let AC = null, master = null, muted = false;
+function ensureAudio() {
+  try {
+    if (!AC) { AC = new (window.AudioContext || window.webkitAudioContext)(); master = AC.createGain(); master.gain.value = .5; master.connect(AC.destination); }
+    if (AC.state === 'suspended') AC.resume();
+  } catch (e) {}
+}
+function tone(f, d, type = 'sine', v = .1, f2 = 0, delay = 0) {
+  if (!AC || muted) return;
+  const t = AC.currentTime + delay, o = AC.createOscillator(), gn = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + d);
+  gn.gain.setValueAtTime(.0001, t); gn.gain.exponentialRampToValueAtTime(v, t + .006); gn.gain.exponentialRampToValueAtTime(.0001, t + d);
+  o.connect(gn); gn.connect(master); o.start(t); o.stop(t + d + .05);
+}
+let plinkCD = 0;
+const sfx = {
+  coin() { tone(1900, .06, 'square', .035); tone(2800, .14, 'sine', .06, 0, .03); },
+  plink() { if (plinkCD > 0) return; plinkCD = .04; tone(2200 + Math.random() * 900, .05, 'sine', .035); },
+  land() { tone(260, .07, 'triangle', .06, 140); },
+  slot(t) { if (t === 'ticket') { tone(988, .1, 'square', .05); tone(1319, .16, 'square', .05, 0, .08); } else if (t === 'dragon') { tone(523, .14, 'triangle', .08, 784); } else { tone(1568, .1, 'sine', .07, 2093); } },
+  lamp(n) { const f = 523 * Math.pow(2, [0, 2, 4, 7, 9][n - 1] / 12); tone(f, .22, 'square', .06); tone(f * 2, .3, 'sine', .04, 0, .05); },
+  party() { [523, 659, 784, 1047, 784, 1047, 1319, 1568].forEach((f, i) => tone(f, .22, 'square', .07, 0, i * .09)); },
+  roll() { tone(180, .4, 'triangle', .03, 120); },
+  win(v) { const b = v >= 40 ? 784 : 659; [0, 4, 7, 12].forEach((s, i) => tone(b * Math.pow(2, s / 12), .18, 'triangle', .08, 0, i * .07)); },
+  jackpot() { for (let i = 0; i < 20; i++) tone(523 * Math.pow(2, ([0, 4, 7, 12][i % 4] + 12 * Math.floor(i / 10)) / 12), .18, 'square', .07, 0, i * .07); },
+};
+let beatT = 0, beatI = 0;
+const BEAT = [659, 784, 988, 784, 698, 880, 1047, 880];
+function music(dt) {
+  beatT += dt;
+  if (beatT >= .17) { beatT -= .17; const n = BEAT[beatI % 8]; tone(n, .1, 'square', .025); if (beatI % 2 === 0) tone(n / 4, .14, 'triangle', .07); beatI++; }
+}
+
+// ================= HUD / effects =================
+const elCoins = document.getElementById('cCoins'), elTickets = document.getElementById('cTickets'), elDragons = document.getElementById('cDragons');
+const fx = document.getElementById('fx'), banner = document.getElementById('banner');
+const _v = new THREE.Vector3();
+function pop(text, x, y, z, color = '#fff', size = 20) {
+  _v.set(x, y, z).project(camera);
+  if (_v.z > 1) return;
+  const el = document.createElement('div'); el.className = 'pop'; el.textContent = text;
+  el.style.left = ((_v.x + 1) / 2 * app.clientWidth) + 'px'; el.style.top = ((1 - _v.y) / 2 * app.clientHeight) + 'px';
+  el.style.color = color; el.style.fontSize = size + 'px';
+  fx.appendChild(el); setTimeout(() => el.remove(), 1400);
+}
+let bannerT = 0;
+function showBanner(title, sub, color = '#ffd34d', dur = 2.2) {
+  document.getElementById('bTitle').textContent = title; document.getElementById('bTitle').style.color = color;
+  document.getElementById('bSub').textContent = sub; banner.style.borderColor = color;
+  banner.classList.add('show'); bannerT = dur;
+}
+
+// ================= table physics (top-down, in table units; 10 units = 1 world unit) =================
+const K = 0.1, W = 360, D = 300, PMIN = 30, PMAX = 110, PH = 32, BACK = -15;
+const PR = 13, DR = 19;
+let pf = PMIN, phase = 0;
+const balls = [];
+const sphereGeo = new THREE.SphereGeometry(1, 20, 14);
+function makeBall(type, state, x, y, h = 0) {
+  const r = type === 'd' ? DR : PR;
+  const mesh = new THREE.Mesh(sphereGeo, type === 'd' ? M.dragon : M.pearl);
+  mesh.scale.setScalar(r * K); mesh.castShadow = true; scene.add(mesh);
+  const b = { type, r, m: r * r * (type === 'd' ? 10 : 1), x, y, px: x, py: y, h, vh: 0, vx: 0, vy: 0, state, mesh, t: 0 };
+  balls.push(b); return b;
+}
+function dragonsOnTable() { let n = 0; for (const b of balls) if (b.type === 'd' && b.state !== 'chute' && b.state !== 'disc') n++; return n; }
+
+function solveLayer(list, isTop, prefill) {
+  const n = list.length;
+  for (let i = 0; i < n; i++) {
+    const a = list[i];
+    for (let j = i + 1; j < n; j++) {
+      const b = list[j], dx = b.x - a.x, dy = b.y - a.y, rr2 = a.r + b.r;
+      if (dx > rr2 || dx < -rr2 || dy > rr2 || dy < -rr2) continue;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < rr2 * rr2 && d2 > 1e-6) {
+        const d = Math.sqrt(d2), ov = rr2 - d, nx = dx / d, ny = dy / d, wa = b.m / (a.m + b.m), wb = 1 - wa;
+        a.x -= nx * ov * wa; a.y -= ny * ov * wa; b.x += nx * ov * wb; b.y += ny * ov * wb;
+      }
+    }
+  }
+  for (const b of list) {
+    if (b.x < b.r) b.x = b.r; else if (b.x > W - b.r) b.x = W - b.r;
+    if (isTop) { if (b.y < BACK + b.r) b.y = BACK + b.r; if (prefill && b.y > pf - b.r) b.y = pf - b.r; }
+    else { if (b.y - b.r < pf) b.y = pf + b.r; if (prefill && b.y > D - b.r - 2) b.y = D - b.r - 2; }
+  }
+}
+function tableStep(prefill = false) {
+  const tl = [], tp = [];
+  for (const b of balls) { if (b.state === 'table') tl.push(b); else if (b.state === 'top') tp.push(b); }
+  for (let it = 0; it < 5; it++) { solveLayer(tl, false, prefill); solveLayer(tp, true, prefill); }
+}
+
+// prefill
+for (let i = 0; i < 82; i++) { const t = i < 6 ? 'd' : 'p', r = t === 'd' ? DR : PR; makeBall(t, 'table', r + Math.random() * (W - 2 * r), PMAX + r + Math.random() * (t === 'd' ? 90 : D - PMAX - 2 * r)); }
+for (let i = 0; i < 26; i++) makeBall('p', 'top', PR + Math.random() * (W - 2 * PR), BACK + PR + Math.random() * (PMAX - BACK - 2 * PR), PH);
+pf = PMAX; for (let k = 0; k < 400; k++) tableStep(true);
+for (const b of balls) { b.px = b.x; b.py = b.y; }
+
+function physStep(dt) {
+  const prev = pf;
+  phase += dt * Math.PI * 2 / 3.0;
+  pf = PMIN + (PMAX - PMIN) * (0.5 - 0.5 * Math.cos(phase));
+  const dpf = pf - prev;
+  for (const b of balls) {
+    if (b.state === 'table' || b.state === 'top') {
+      if (b.state === 'top' && dpf > 0) { b.y += dpf; b.py += dpf; }
+      const vx = (b.x - b.px) * .86, vy = (b.y - b.py) * .86;
+      b.px = b.x; b.py = b.y; b.x += vx; b.y += vy;
+    } else if (b.state === 'drop') {
+      b.x += b.vx; b.y += b.vy; b.vh -= .26; b.h += b.vh;
+      const base = b.y < pf - 2 ? PH : 0;
+      if (b.h <= base) {
+        b.h = base; b.state = base ? 'top' : 'table'; b.px = b.x; b.py = b.y;
+        if (b.vh < -2) sfx.land();
+      }
+    } else if (b.state === 'fall') {
+      b.x += b.vx; b.y += b.vy; b.vh -= .26; b.h += b.vh;
+    }
+  }
+  tableStep();
+  for (const b of balls) {
+    if (b.state === 'top' && b.y > pf) { b.state = 'drop'; b.vh = 0; b.vx = 0; b.vy = .25; }
+    else if (b.state === 'table' && b.y > D) {
+      b.state = 'fall'; b.vx = (b.x - b.px) * .5; b.vy = Math.max(b.y - b.py, .5); b.vh = 0; b.party = mode === 'party';
+    }
+  }
+}
+
+// ================= pin board (vertical plane, world units) =================
+const boardBalls = [];
+const BZ = -12.4, G = 75, BR = PR * K, PEG_R = .36;
+const dropQueue = [];
+function spawnBoardPearl() {
+  const mesh = new THREE.Mesh(sphereGeo, M.pearl); mesh.scale.setScalar(BR); mesh.castShadow = true; scene.add(mesh);
+  boardBalls.push({ x: (Math.random() - .5) * 3, y: 37.4, vx: (Math.random() - .5) * 10, vy: -2, mesh, passed: false });
+}
+function boardStep(dt) {
+  for (const b of boardBalls) {
+    b.vy -= G * dt; b.x += b.vx * dt; b.y += b.vy * dt;
+    for (const [px, py] of PEGS) {
+      const dx = b.x - px, dy = b.y - py, R = BR + PEG_R, d2 = dx * dx + dy * dy;
+      if (d2 < R * R) {
+        const d = Math.sqrt(d2) || .001, nx = dx / d, ny = dy / d;
+        b.x = px + nx * R; b.y = py + ny * R;
+        const vn = b.vx * nx + b.vy * ny;
+        if (vn < 0) { b.vx -= 1.45 * vn * nx; b.vy -= 1.45 * vn * ny; b.vx *= .96; b.vx += (Math.random() - .5) * 4; if (vn < -6) sfx.plink(); }
+      }
+    }
+    if (b.y < DIV_Y1 + BR && b.y > DIV_Y0) for (const sx of DIVIDERS) {
+      const dx = b.x - sx, R = BR + .22;
+      if (Math.abs(dx) < R) { b.x = sx + Math.sign(dx || 1) * R; b.vx *= -.4; }
+    }
+    if (b.x < -18 + BR) { b.x = -18 + BR; b.vx = Math.abs(b.vx) * .5; }
+    if (b.x > 18 - BR) { b.x = 18 - BR; b.vx = -Math.abs(b.vx) * .5; }
+  }
+  for (let i = 0; i < boardBalls.length; i++) for (let j = i + 1; j < boardBalls.length; j++) {
+    const a = boardBalls[i], c = boardBalls[j], dx = c.x - a.x, dy = c.y - a.y, d2 = dx * dx + dy * dy, R = BR * 2;
+    if (d2 < R * R && d2 > 1e-6) { const d = Math.sqrt(d2), o = (R - d) / 2, nx = dx / d, ny = dy / d; a.x -= nx * o; a.y -= ny * o; c.x += nx * o; c.y += ny * o; }
+  }
+  for (let i = boardBalls.length - 1; i >= 0; i--) {
+    const b = boardBalls[i];
+    if (!b.passed && b.y < 11.2) { b.passed = true; slotHit(slotIndex(b.x), b.x); }
+    if (b.y < 6.6) {
+      scene.remove(b.mesh); boardBalls.splice(i, 1);
+      const nb = makeBall('p', 'drop', (b.x + 18) / K, (BZ + 12) / K, 6.6 / K - PR);
+      nb.vy = .55; nb.vh = b.vy / K / 120 * .5;
+    }
+  }
+}
+
+function slotHit(i, x) {
+  const t = SLOT_TYPES[i];
+  slotFlash[i] = .45; sfx.slot(t);
+  const wy = 15, wz = -10.5;
+  if (t === 'pearl') {
+    const n = 2; for (let k = 0; k < n; k++) dropQueue.push({ kind: 'pearl', delay: k * .14 });
+    pop('+' + n + ' 珍珠', x, wy, wz, '#dff3ff');
+    if (mode === 'party') partyPearls += n;
+  } else if (t === 'ticket') {
+    tickets += 1; if (mode === 'party') partyTickets += 1;
+    pop('+1 彩票', x, wy, wz, '#ffd34d');
+    if (mode === 'normal' && lamps < 5 && Math.random() < .12) { lamps++; sfx.lamp(lamps); pop('燈號 ' + lamps + '/5', x, wy + 3, wz, '#9fffb0', 18); if (lamps >= 5) startParty(); }
+  } else {
+    const pending = dropQueue.filter(q => q.kind === 'dragon').length;
+    if (dragonsOnTable() + pending >= 10) pop('龍珠已滿 10 顆', x, wy, wz, '#ffb3c8', 18);
+    else { dropQueue.push({ kind: 'dragon', delay: .2 }); pop('龍珠出現！', x, wy, wz, '#ff9a3c', 22); }
+  }
+}
+function processDrops(dt) {
+  for (let i = dropQueue.length - 1; i >= 0; i--) {
+    const q = dropQueue[i]; q.delay -= dt;
+    if (q.delay > 0) continue;
+    dropQueue.splice(i, 1);
+    if (q.kind === 'pearl') {
+      const b = makeBall('p', 'drop', 35 + Math.random() * 40, 16, 70); b.vx = .5 + Math.random() * .5; b.vy = .1; b.vh = 1.2;
+    } else {
+      const b = makeBall('d', 'drop', W - 40 - Math.random() * 20, 16, 70); b.vx = -.6; b.vy = .1; b.vh = 1.2;
+    }
+  }
+}
+
+// ================= party =================
+function startParty() {
+  mode = 'party'; partyT = PARTY_LEN; partyTickets = 0; partyPearls = 0; beatT = 0; beatI = 0;
+  showBanner('派對時間', '15 秒內龍珠掉進紅洞，贏超級大獎 ' + SUPER + ' 張！', '#ffd34d', 2.4);
+  sfx.party();
+}
+function endParty() {
+  mode = 'normal'; lamps = 0;
+  showBanner('派對結束', '本場得到 ' + partyTickets + ' 張彩票', '#9fe8ff', 2);
+}
+
+// ================= turntable =================
+const _p = new THREE.Vector3();
+function worldOf(b) {
+  return _p.set((b.x - W / 2) * K, (b.h + b.r) * K, -12 + b.y * K);
+}
+function toChute(b) {
+  const w = worldOf(b).clone();
+  b.state = 'chute'; b.t = 0;
+  b.curve = new THREE.CatmullRomCurve3([w, new THREE.Vector3(Math.min(w.x, 16), -3.2, 21), new THREE.Vector3(20.5, -3.6, 19), new THREE.Vector3(22.4, -4.4, 13.4)]);
+  sfx.roll();
+}
+function pickHole() {
+  const r = Math.random();
+  if (r < .12) return 5;
+  const blues = [0, 2, 4], yellows = [1, 3];
+  return r < .54 ? blues[Math.floor(Math.random() * 3)] : yellows[Math.floor(Math.random() * 2)];
+}
+function toDisc(b) {
+  b.state = 'disc'; b.t = 0; b.dur = 2.2 + Math.random() * 1.6;
+  const wx = 22.4 - DISC.x, wz = 13.4 - DISC.z;
+  const phi = Math.atan2(wz, wx);
+  b.a0 = phi + DISC.rot; b.rad0 = Math.hypot(wx, wz);
+  b.hole = pickHole();
+  let target = HOLES[b.hole].a;
+  let delta = ((target - b.a0) % (Math.PI * 2) + Math.PI * 3) % (Math.PI * 2) - Math.PI;
+  b.delta = delta; b.sink = 0;
+}
+function discResult(b) {
+  const hd = HOLES[b.hole];
+  let v, label, color;
+  if (hd.v === 'S') {
+    if (b.party) { v = SUPER; label = '超級大獎 +' + SUPER; color = '#ff4d6d'; }
+    else { v = 20; label = '紅洞 +20（派對時間外）'; color = '#ff9aa8'; }
+  } else { v = hd.v; label = '+' + v + ' 彩票'; color = v === 40 ? '#ffd34d' : '#7fc0ff'; }
+  tickets += v; if (mode === 'party') partyTickets += v;
+  history.push(v); if (history.length > 18) history.shift();
+  lastResult = hd.v === 'S' ? 'S' : v; resultFlash = 2;
+  const w = new THREE.Vector3(DISC.x, DISC.y + 3, DISC.z);
+  pop(label, w.x, w.y, w.z, color, v >= SUPER ? 30 : 24);
+  if (v >= SUPER) { showBanner('超級大獎', '+' + SUPER + ' 張彩票', '#ff4d6d', 3.2); sfx.jackpot(); }
+  else sfx.win(v);
+}
+function updateDiscBalls(dt) {
+  DISC.rot += dt * (mode === 'party' ? 1.5 : .9);
+  discGroup.rotation.y = DISC.rot;
+  for (let i = balls.length - 1; i >= 0; i--) {
+    const b = balls[i];
+    if (b.state === 'chute') {
+      b.t += dt / .9;
+      if (b.t >= 1) toDisc(b);
+      else { b.curve.getPoint(b.t, b.mesh.position); b.mesh.rotation.x += dt * 12; }
+    } else if (b.state === 'disc') {
+      b.t += dt;
+      const p = Math.min(1, b.t / b.dur), e = 1 - Math.pow(1 - p, 3);
+      const ang = b.a0 + b.delta * e + Math.sin(b.t * 7) * .12 * (1 - p);
+      const rad = b.rad0 + (3.9 - b.rad0) * e;
+      const wa = ang - DISC.rot;
+      let y = DISC.y + .4 + b.r * K;
+      if (p >= 1) { b.sink += dt; y -= Math.min(1, b.sink / .35) * 1.6; b.mesh.scale.setScalar(b.r * K * (1 - Math.min(.5, b.sink))); }
+      b.mesh.position.set(DISC.x + Math.cos(wa) * rad, y, DISC.z + Math.sin(wa) * rad);
+      b.mesh.rotation.y += dt * 6;
+      if (b.sink > .4) { discResult(b); scene.remove(b.mesh); balls.splice(i, 1); }
+    }
+  }
+}
+
+// ================= dynamic textures =================
+function drawParty() {
+  const g = partyTex.g, w = 1200, h = 260, party = mode === 'party';
+  const gr = g.createLinearGradient(0, 0, 0, h);
+  gr.addColorStop(0, party ? `hsl(${(time * 80) % 360},70%,55%)` : '#5cc6ff'); gr.addColorStop(1, '#1a5fd0');
+  g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  g.strokeStyle = 'rgba(255,255,255,.25)'; g.lineWidth = 2;
+  for (const cx of [210, 990]) for (let r = 20; r < 130; r += 22) { g.beginPath(); g.arc(cx, 120, r, 0, Math.PI * 2); g.stroke(); }
+  for (const cx of [210, 990]) for (let a = 0; a < 12; a++) { g.beginPath(); g.moveTo(cx, 120); g.lineTo(cx + Math.cos(a * Math.PI / 6) * 130, 120 + Math.sin(a * Math.PI / 6) * 130); g.stroke(); }
+  g.font = `900 64px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 12; g.strokeStyle = '#0b2e7a'; g.strokeText('派對時間', 600, 46); g.fillStyle = '#ffe04d'; g.fillText('派對時間', 600, 46);
+  g.font = `900 22px ${FONT}`; g.fillStyle = '#fff'; g.fillText('PARTY TIME', 600, 92);
+  led(g, party ? Math.ceil(partyT) : 0, 540, 108, 120, 84, 2);
+  led(g, party ? partyPearls : lamps, 110, 100, 200, 84, 3);
+  led(g, party ? partyTickets : 0, 890, 100, 200, 84, 3);
+  g.font = `900 24px ${FONT}`; g.fillStyle = '#fff';
+  g.fillText(party ? '珍珠' : '燈號', 210, 202); g.fillText('彩票', 990, 202);
+  for (let i = 0; i < 5; i++) {
+    const x = 420 + i * 90, y = 228, lit = party ? (Math.floor(time * 10) + i) % 2 === 0 : i < lamps;
+    if (lit) { const rg = g.createRadialGradient(x, y, 4, x, y, 36); rg.addColorStop(0, 'rgba(255,240,150,.95)'); rg.addColorStop(1, 'rgba(255,200,0,0)'); g.fillStyle = rg; g.beginPath(); g.arc(x, y, 36, 0, Math.PI * 2); g.fill(); }
+    g.beginPath(); g.arc(x, y, 24, 0, Math.PI * 2); g.fillStyle = lit ? '#fff2a8' : '#1c3a7a'; g.fill();
+    g.lineWidth = 4; g.strokeStyle = lit ? '#fff' : '#4e78c4'; g.stroke();
+    ticketIcon(g, x, y, 12);
+  }
+  partyTex.t.needsUpdate = true;
+}
+function drawRight() {
+  const g = rightTex.g, w = 560, h = 2000, party = mode === 'party';
+  const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#173d9e'); gr.addColorStop(.6, '#0c2a78'); gr.addColorStop(1, '#081c52');
+  g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = `900 92px ${FONT}`; g.lineWidth = 12; g.strokeStyle = '#08164a'; g.strokeText('超級大獎', w / 2, 90);
+  const tg = g.createLinearGradient(0, 40, 0, 140); tg.addColorStop(0, '#fff'); tg.addColorStop(1, '#ff9ad0'); g.fillStyle = tg; g.fillText('超級大獎', w / 2, 90);
+  g.font = `900 34px ${FONT}`; g.fillStyle = '#ffd34d'; g.fillText('SUPER BONUS', w / 2, 158);
+  led(g, SUPER, 120, 190, 320, 120, 3);
+  const circles = [['30', '彩票', '#2f7bff', 30], ['超級', '大獎', '#ff3d7f', 'S'], ['40', '彩票', '#ffc61a', 40]];
+  circles.forEach(([a, b2, c, v], i) => {
+    const x = 105 + i * 175, y = 410, lit = resultFlash > 0 && lastResult === v && Math.floor(time * 8) % 2 === 0;
+    const rg = g.createRadialGradient(x - 20, y - 20, 10, x, y, 74); rg.addColorStop(0, '#fff'); rg.addColorStop(.35, c); rg.addColorStop(1, '#0b1a40');
+    g.beginPath(); g.arc(x, y, 72, 0, Math.PI * 2); g.fillStyle = rg; g.fill();
+    g.lineWidth = lit ? 14 : 6; g.strokeStyle = lit ? '#fff' : '#9bb6e8'; g.stroke();
+    g.fillStyle = v === 40 ? '#4a2a00' : '#fff'; g.font = `900 ${a.length > 2 ? 34 : 50}px ${FONT}`; g.fillText(a, x, y - 14);
+    g.font = `900 28px ${FONT}`; g.fillText(b2, x, y + 26);
+  });
+  rr(g, 40, 520, w - 80, 120, 20); g.fillStyle = party && Math.floor(time * 4) % 2 === 0 ? '#ff3d7f' : 'rgba(255,255,255,.12)'; g.fill();
+  g.font = `900 40px ${FONT}`; g.fillStyle = '#fff'; g.fillText('派對時間超級大獎機會', w / 2, 562);
+  g.font = `900 24px ${FONT}`; g.fillStyle = '#cfe0ff'; g.fillText('SUPER BONUS CHANCE', w / 2, 608);
+  // history grid 3 x 6 (newest at top-left)
+  const cols = { 30: '#2f7bff', 40: '#ffc61a', 20: '#ff9aa8', [SUPER]: '#ff3d7f' };
+  for (let i = 0; i < 18; i++) {
+    const cx = 120 + (i % 3) * 160, cy = 730 + Math.floor(i / 3) * 128;
+    const v = history[history.length - 1 - i];
+    g.beginPath(); g.arc(cx, cy, 52, 0, Math.PI * 2);
+    if (v !== undefined) {
+      const rg = g.createRadialGradient(cx - 14, cy - 14, 6, cx, cy, 54); rg.addColorStop(0, '#fff'); rg.addColorStop(.4, cols[v] || '#7fc0ff'); rg.addColorStop(1, '#14204a');
+      g.fillStyle = rg; g.fill(); g.lineWidth = 5; g.strokeStyle = i === 0 && resultFlash > 0 ? '#fff' : 'rgba(255,255,255,.6)'; g.stroke();
+      g.fillStyle = v === 40 ? '#3a2400' : '#fff'; g.font = `900 ${v >= 100 ? 34 : 42}px ${FONT}`; g.fillText(String(v), cx, cy - 6);
+      g.font = `900 18px ${FONT}`; g.fillText('彩票', cx, cy + 26);
+    } else { g.fillStyle = '#1b2f66'; g.fill(); g.lineWidth = 4; g.strokeStyle = '#30488a'; g.stroke(); }
+  }
+  g.font = `900 46px ${FONT}`; g.fillStyle = '#ffd34d'; g.fillText('龍珠轉盤', w / 2, 1530);
+  g.font = `500 26px ${FONT}`; g.fillStyle = '#cfe0ff';
+  g.fillText('藍洞 30 張・黃洞 40 張', w / 2, 1590);
+  g.fillText('派對時間內紅洞 = 超級大獎', w / 2, 1630);
+  for (let i = 0; i < 8; i++) {
+    const on = (Math.floor(time * (party ? 12 : 3)) + i) % 4 === 0;
+    g.fillStyle = on ? '#fff4b0' : '#3a4f8a'; g.beginPath(); g.arc(60 + i * 63, 1700, 14, 0, Math.PI * 2); g.fill();
+  }
+  rightTex.t.needsUpdate = true;
+}
+
+// ================= input =================
+function insertCoin() {
+  ensureAudio();
+  if (coins <= 0) { coins += 500; showBanner('補充代幣', '+500 枚', '#59d0ff', 1.4); }
+  coins--; sfx.coin();
+  spawnBoardPearl();
+}
+document.getElementById('coinBtn').addEventListener('click', insertCoin);
+const autoBtn = document.getElementById('autoBtn');
+autoBtn.addEventListener('click', () => { ensureAudio(); auto = !auto; autoBtn.setAttribute('aria-pressed', auto); autoBtn.textContent = auto ? '連續投幣中' : '連續投幣'; });
+const muteBtn = document.getElementById('muteBtn');
+muteBtn.addEventListener('click', () => { ensureAudio(); muted = !muted; muteBtn.setAttribute('aria-pressed', muted); muteBtn.textContent = muted ? '音效 關' : '音效 開'; });
+document.getElementById('camBtn').addEventListener('click', resetCamera);
+let lastKey = 0;
+addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); const n = performance.now(); if (n - lastKey > 120) { lastKey = n; insertCoin(); } }
+});
+
+// ================= loop =================
+const lampColors = [new THREE.Color(3, .3, .5), new THREE.Color(.3, 2.6, .6), new THREE.Color(.4, .9, 3), new THREE.Color(3, 2.2, .3)];
+let acc = 0, last = performance.now(), texT = 0;
+function update(dt) {
+  time += dt; plinkCD -= dt;
+  if (auto) { autoCD -= dt; if (autoCD <= 0) { autoCD = .35; insertCoin(); } }
+  processDrops(dt);
+  if (mode === 'party') { partyT -= dt; music(dt); if (partyT <= 0) endParty(); }
+  for (let i = 0; i < 7; i++) slotFlash[i] = Math.max(0, slotFlash[i] - dt);
+  resultFlash = Math.max(0, resultFlash - dt);
+  if (bannerT > 0) { bannerT -= dt; if (bannerT <= 0) banner.classList.remove('show'); }
+  // falling balls → trough / chute
+  for (let i = balls.length - 1; i >= 0; i--) {
+    const b = balls[i];
+    if (b.state === 'fall' && b.h < -40) {
+      if (b.type === 'd') toChute(b);
+      else if (b.h < -75) { scene.remove(b.mesh); balls.splice(i, 1); }
+    }
+  }
+  updateDiscBalls(dt);
+  // lights
+  const party = mode === 'party';
+  const li = Math.floor(time * (party ? 8 : 1.2)) % lampColors.length;
+  lampMat.color.copy(lampColors[li]); lampLight.color.copy(lampColors[li]).multiplyScalar(.33);
+  if (party) {
+    const c = new THREE.Color().setHSL((time * .5) % 1, 1, .55).multiplyScalar(3);
+    M.led.color.copy(c); boardLight.color.setHSL((time * .5) % 1, .8, .6);
+    M.dragon.emissiveIntensity = 1 + Math.sin(time * 10) * .4;
+  } else {
+    M.led.color.setRGB(.5, 1.6, 3.2); boardLight.color.set(0x4fb6ff); M.dragon.emissiveIntensity = .55;
+  }
+  holeRings[5].material.color.setRGB(party && Math.floor(time * 6) % 2 ? 3.5 : 1.6, .2, .4);
+  // textures at ~12 fps
+  texT -= dt;
+  if (texT <= 0) { texT = 1 / 12; drawParty(); drawRight(); drawSlots(); }
+  // HUD
+  elCoins.textContent = coins; elTickets.textContent = tickets; elDragons.textContent = dragonsOnTable() + '/10';
+}
+function syncMeshes() {
+  pusher.position.z = -12 + pf * K;
+  for (const b of balls) {
+    if (b.state === 'chute' || b.state === 'disc') continue;
+    b.mesh.position.set((b.x - W / 2) * K, (b.h + b.r) * K, -12 + b.y * K);
+    if (b.state === 'table' || b.state === 'top') {
+      const dx = b.x - b.px, dy = b.y - b.py;
+      b.mesh.rotation.x += dy * K / (b.r * K) ; b.mesh.rotation.z -= dx * K / (b.r * K);
+    }
+  }
+  for (const b of boardBalls) b.mesh.position.set(b.x, b.y, BZ);
+}
+let firstFrame = true;
+function frame(now) {
+  if (stopped) return;
+  try { tick(now); } catch (err) { stopped = true; window.__fail('機台發生錯誤：' + err.message); return; }
+  if (firstFrame) { firstFrame = false; const ld = document.getElementById('loading'); if (ld) ld.remove(); }
+  requestAnimationFrame(frame);
+}
+function tick(now) {
+  const dt = Math.min(.1, (now - last) / 1000); last = now;
+  acc += dt;
+  const STEP = 1 / 120;
+  while (acc >= STEP) { physStep(STEP); boardStep(STEP); acc -= STEP; }
+  update(dt);
+  syncMeshes();
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+function drawStatic() { drawBoard(); drawMarquee(); drawCard(); drawSlots(); drawParty(); drawRight(); }
+drawStatic();
+resize();
+requestAnimationFrame(frame);
+if (document.fonts) {
+  Promise.race([
+    Promise.all(['900 40px "Noto Sans TC"', '500 40px "Noto Sans TC"'].map(f => document.fonts.load(f, '東海龍珠玩法說明投一枚代幣得顆珍珠經過釘板落到推盤動前進穿獎項口可額外或彩票掉進轉依洞顏色張亮燈累積個入派對時間紅贏超級大本機台上限幣出現已滿藍黃外結束場補充羅'))),
+    new Promise(r => setTimeout(r, 4000)),
+  ]).then(drawStatic).catch(() => {});
+}
+})();
+</script>
+
+</html>
